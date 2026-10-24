@@ -3,95 +3,97 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>我的專屬單字庫</title>
-  <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px; }
-    .header { text-align: center; margin-bottom: 20px; color: #333; }
-    .word-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
-    .word-info h3 { margin: 0 0 5px 0; color: #2563eb; }
-    .word-info p { margin: 0; color: #6b7280; font-size: 14px; }
-    .delete-btn { background-color: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-    .delete-btn:hover { background-color: #dc2828; }
-    #loading { text-align: center; color: #6b7280; }
-  </style>
+  <title>單字小精靈 - 專屬字庫</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入 LINE LIFF 官方 SDK -->
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
-<body>
-
-  <div class="header">
-    <h2>📚 我的專屬單字庫</h2>
+<body class="bg-slate-50 p-4 font-sans text-slate-800">
+  <div class="max-w-md mx-auto mt-8">
+    <h1 class="text-2xl font-bold text-center text-indigo-600 mb-6">📚 我的單字庫</h1>
+    <div id="loading" class="text-center text-slate-500 animate-pulse">登入中並撈取資料...</div>
+    <div id="word-list" class="space-y-4"></div>
   </div>
-  
-  <div id="loading">載入中...</div>
-  <div id="word-list"></div>
 
-  <!-- 引入 LINE LIFF SDK -->
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
-    // 🔴 請在這裡填入你的設定值
-    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx3MqmYHS66UFBWzk1LLygTGFbUuq_Yz_N74x_XHq1OVlemDgRtzXs4tFkVUvl66qZ_Kg/exec';
-    const LIFF_ID = '請貼上你的_LIFF_ID'; 
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbx3MqmYHS66UFBWzk1LLygTGFbUuq_Yz_N74x_XHq1OVlemDgRtzXs4tFkVUvl66qZ_Kg/exec'; 
+    const LIFF_ID = '2012189581-6oeaFkK4'; 
 
-    let userId = '';
-
-    // 初始化 LIFF
     async function initializeLiff() {
       try {
         await liff.init({ liffId: LIFF_ID });
-        if (!liff.isLoggedIn()) {
-          liff.login();
-          return;
-        }
-        const profile = await liff.getProfile();
-        userId = profile.userId;
-        fetchWords();
-      } catch (err) {
-        document.getElementById('loading').innerText = 'LIFF 載入失敗，請確認是否在 LINE 環境中開啟。';
-      }
-    }
-
-    // 從 Google Sheets 抓取單字
-    async function fetchWords() {
-      try {
-        const response = await fetch(`${GAS_API_URL}?userId=${userId}`);
-        const result = await response.json();
-        const wordList = document.getElementById('word-list');
-        document.getElementById('loading').style.display = 'none';
-
-        if (result.status === 'success' && result.data.length > 0) {
-          result.data.forEach(item => {
-            const card = document.createElement('div');
-            card.className = 'word-card';
-            card.id = `row-${item.rowId}`;
-            card.innerHTML = `
-              <div class="word-info">
-                <h3>${item.collocation}</h3>
-                <p>${item.meaning} | Level ${item.level}</p>
-              </div>
-              <button class="delete-btn" onclick="markAsMastered(${item.rowId})">已熟記</button>
-            `;
-            wordList.appendChild(card);
-          });
+        if (liff.isLoggedIn()) {
+          // 成功登入，抓取該學生的 User ID
+          const profile = await liff.getProfile();
+          fetchWords(profile.userId); 
         } else {
-          wordList.innerHTML = '<p style="text-align:center; color:#6b7280;">目前沒有單字喔！快去 LINE 查詢吧。</p>';
+          // 若在外部瀏覽器打開，強制引導登入
+          liff.login(); 
         }
-      } catch (error) {
-        document.getElementById('loading').innerText = '資料載入失敗。';
+      } catch (err) {
+        document.getElementById('loading').innerText = 'LIFF 初始化失敗。';
+        console.error('LIFF Error:', err);
       }
     }
 
-    // 將單字標記為已熟記 (軟刪除)
-    async function markAsMastered(rowId) {
-      // 畫面上先隱藏，讓使用者感覺瞬間刪除
-      document.getElementById(`row-${rowId}`).style.display = 'none'; 
+    async function fetchWords(userId) {
+      const list = document.getElementById('word-list');
+      const loading = document.getElementById('loading');
       
-      // 背景發送 API 更新 Google Sheets
-      await fetch(GAS_API_URL, {
+      try {
+        const res = await fetch(`${GAS_URL}?userId=${userId}`);
+        const json = await res.json();
+        
+        loading.style.display = 'none';
+        
+        if (json.status === 'success' && json.data.length > 0) {
+          renderWords(json.data);
+        } else {
+          list.innerHTML = '<p class="text-center text-slate-500 mt-10">目前沒有單字喔！快去 LINE 輸入單字吧！</p>';
+        }
+      } catch (err) {
+        loading.innerText = '載入失敗，請檢查 GAS 網址是否正確。';
+        console.error(err);
+      }
+    }
+
+    function renderWords(words) {
+      const list = document.getElementById('word-list');
+      list.innerHTML = '';
+      
+      words.forEach(word => {
+        const card = document.createElement('div');
+        card.className = 'bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center transition-all duration-300';
+        card.id = `row-${word.rowId}`;
+        
+        card.innerHTML = `
+          <div>
+            <h2 class="text-xl font-bold text-slate-800 tracking-wide">${word.collocation}</h2>
+            <p class="text-sm text-slate-500 mt-1">${word.meaning} <span class="inline-block ml-2 px-2 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded-full font-medium">Level ${word.level}</span></p>
+          </div>
+          <button onclick="markAsMastered(${word.rowId})" class="shrink-0 ml-4 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-200 transition-colors">
+            已熟記 ✔️
+          </button>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    async function markAsMastered(rowId) {
+      const card = document.getElementById(`row-${rowId}`);
+      card.style.opacity = '0';
+      card.style.transform = 'scale(0.95)';
+      setTimeout(() => card.style.display = 'none', 300);
+      
+      await fetch(GAS_URL, {
         method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ rowId: rowId })
       });
     }
 
-    // 啟動程式
+    // 網頁載入時，第一步先啟動 LIFF
     initializeLiff();
   </script>
 </body>
