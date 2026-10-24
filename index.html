@@ -3,43 +3,62 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>單字小精靈 - 學習儀表板</title>
+  <title>VocabTracker - 動態單字儀表板</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <!-- 引入 SweetAlert2 做超美彈出視窗 -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-slate-50 p-4 font-sans text-slate-800 pb-20">
   <div class="max-w-md mx-auto mt-4">
     <!-- 頂部儀表板 -->
-    <div class="bg-indigo-600 rounded-3xl p-6 text-white shadow-lg mb-6">
-      <h1 class="text-2xl font-bold mb-2">🚀 我的學習進度</h1>
-      <p class="text-indigo-200 text-sm mb-4" id="user-greeting">讀取中...</p>
+    <div class="bg-gradient-to-r from-indigo-600 to-blue-500 rounded-3xl p-6 text-white shadow-lg mb-6">
+      <h1 class="text-2xl font-bold mb-2">🚀 Aibel 學習中心</h1>
+      <p class="text-indigo-100 text-sm mb-4" id="user-greeting">讀取中...</p>
       <div class="flex justify-between items-end">
         <div>
           <p class="text-4xl font-black" id="word-count">0</p>
-          <p class="text-xs text-indigo-200 mt-1">待複習單字</p>
+          <p class="text-xs text-indigo-100 mt-1">進入遺忘曲線待複習</p>
+        </div>
+        <div class="text-right">
+          <p class="text-2xl font-bold text-yellow-300" id="mastered-count">0</p>
+          <p class="text-xs text-indigo-100 mt-1">已貫通單字</p>
         </div>
       </div>
     </div>
 
+    <!-- 分頁切換按鈕 -->
+    <div class="flex gap-2 mb-6 bg-slate-200 p-1 rounded-xl">
+      <button onclick="switchTab('review')" id="tab-review" class="flex-1 bg-white shadow-sm py-2 rounded-lg text-sm font-bold text-indigo-600 transition-all">🧠 記憶鍛鍊</button>
+      <button onclick="switchTab('mastered')" id="tab-mastered" class="flex-1 py-2 rounded-lg text-sm font-bold text-slate-500 transition-all">🏆 成就殿堂</button>
+    </div>
+
     <div id="loading" class="text-center text-slate-500 animate-pulse my-10">資料同步中...</div>
+    
+    <!-- 兩個列表區塊 -->
     <div id="word-list" class="space-y-4"></div>
+    <div id="mastered-list" class="space-y-4 hidden">
+      <div class="bg-yellow-50 border border-yellow-200 p-6 rounded-2xl text-center">
+        <p class="text-3xl mb-2">🎉</p>
+        <h3 class="text-lg font-bold text-yellow-800 mb-1">太神啦！</h3>
+        <p class="text-sm text-yellow-600">這些是你已經完全貫通的單字！</p>
+      </div>
+      <!-- 貫通單字會塞在這裡 -->
+    </div>
   </div>
 
   <script>
-    // 你的三個專屬金鑰已設定完成
     const GAS_URL = 'https://script.google.com/macros/s/AKfycbx3MqmYHS66UFBWzk1LLygTGFbUuq_Yz_N74x_XHq1OVlemDgRtzXs4tFkVUvl66qZ_Kg/exec'; 
     const LIFF_ID = '2012189581-6oeaFkK4'; 
     const N8N_WEBHOOK_URL = 'https://xiaoyouke.app.n8n.cloud/webhook/e5a8448e-a200-46a7-a89e-712c35f042f9'; 
 
     let wordData = [];
+    let masteredData = []; // 模擬已貫通資料
 
     async function initializeLiff() {
       await liff.init({ liffId: LIFF_ID });
       if (liff.isLoggedIn()) {
         const profile = await liff.getProfile();
-        document.getElementById('user-greeting').innerText = `嗨，${profile.displayName}！繼續保持！`;
+        document.getElementById('user-greeting').innerText = `嗨，${profile.displayName}！今天也要打敗遺忘曲線！`;
         fetchWords(profile.userId); 
       } else {
         liff.login(); 
@@ -56,7 +75,21 @@
         document.getElementById('word-count').innerText = wordData.length;
         renderWords();
       } else {
-        document.getElementById('word-list').innerHTML = '<p class="text-center text-slate-500">目前沒有單字喔！</p>';
+        document.getElementById('word-list').innerHTML = '<p class="text-center text-slate-500">目前沒有待複習單字喔！</p>';
+      }
+    }
+
+    function switchTab(tab) {
+      if(tab === 'review') {
+        document.getElementById('tab-review').className = 'flex-1 bg-white shadow-sm py-2 rounded-lg text-sm font-bold text-indigo-600 transition-all';
+        document.getElementById('tab-mastered').className = 'flex-1 py-2 rounded-lg text-sm font-bold text-slate-500 transition-all';
+        document.getElementById('word-list').classList.remove('hidden');
+        document.getElementById('mastered-list').classList.add('hidden');
+      } else {
+        document.getElementById('tab-mastered').className = 'flex-1 bg-white shadow-sm py-2 rounded-lg text-sm font-bold text-indigo-600 transition-all';
+        document.getElementById('tab-review').className = 'flex-1 py-2 rounded-lg text-sm font-bold text-slate-500 transition-all';
+        document.getElementById('word-list').classList.add('hidden');
+        document.getElementById('mastered-list').classList.remove('hidden');
       }
     }
 
@@ -65,22 +98,22 @@
       list.innerHTML = '';
       wordData.forEach(word => {
         const card = document.createElement('div');
-        card.className = 'bg-white p-5 rounded-2xl shadow-sm border border-slate-100 transition-all';
+        card.className = 'bg-white p-5 rounded-2xl shadow-sm border border-slate-100 transition-all relative overflow-hidden';
         card.id = `row-${word.rowId}`;
         card.innerHTML = `
-          <div class="flex justify-between items-start mb-3">
+          <div class="absolute top-0 left-0 w-1 h-full bg-red-400"></div>
+          <div class="flex justify-between items-start mb-3 pl-2">
             <div>
               <h2 class="text-xl font-bold text-slate-800">${word.collocation}</h2>
               <p class="text-sm text-slate-500">${word.meaning}</p>
             </div>
-            <span class="px-2 py-1 bg-indigo-50 text-indigo-600 text-xs rounded-lg font-bold">Lvl ${word.level}</span>
+            <div class="text-right">
+              <span class="px-2 py-1 bg-red-50 text-red-600 text-xs rounded-lg font-bold">⚠️ 記憶衰退中</span>
+            </div>
           </div>
-          <div class="flex gap-2 mt-4">
-            <button onclick="startAIPractice('${word.collocation}')" class="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-sm font-bold shadow-md shadow-indigo-200">
-              🧠 AI 克漏字挑戰
-            </button>
-            <button onclick="archiveWord(${word.rowId})" class="px-4 bg-slate-100 text-slate-500 py-2 rounded-xl text-sm font-bold">
-              歸檔
+          <div class="flex gap-2 mt-4 pl-2">
+            <button onclick="chooseExerciseType('${word.collocation}', ${word.rowId})" class="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-sm font-bold shadow-md shadow-indigo-200">
+              🤖 AI 動態測驗
             </button>
           </div>
         `;
@@ -88,10 +121,29 @@
       });
     }
 
-    async function startAIPractice(targetWord) {
+    async function chooseExerciseType(targetWord, rowId) {
+      const { value: mode } = await Swal.fire({
+        title: '選擇鍛鍊模式',
+        input: 'select',
+        inputOptions: {
+          'cloze': '📝 學測克漏字情境',
+          'multiple': '🎯 詞彙單選題 (含誘答選項)'
+        },
+        inputPlaceholder: '請選擇題型',
+        showCancelButton: true,
+        confirmButtonText: '開始挑戰',
+        confirmButtonColor: '#4f46e5'
+      });
+
+      if (mode) {
+        startAIPractice(targetWord, mode, rowId);
+      }
+    }
+
+    async function startAIPractice(targetWord, mode, rowId) {
       Swal.fire({
-        title: 'AI 即時出題中...',
-        text: '正在為你量身打造情境句，請稍候！',
+        title: 'AI 命題中...',
+        text: '正在根據大考難度生成專屬情境，請稍候！',
         allowOutsideClick: false,
         didOpen: () => { Swal.showLoading(); }
       });
@@ -100,14 +152,14 @@
         const res = await fetch(N8N_WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ word: targetWord })
+          // 這裡把單字跟題型一起傳給 n8n
+          body: JSON.stringify({ word: targetWord, mode: mode })
         });
         const aiData = await res.json();
-        
         const questionData = aiData.output || aiData; 
 
         Swal.fire({
-          title: '克漏字挑戰！',
+          title: '測驗開始！',
           html: `
             <p class="text-lg text-left font-medium text-slate-700 leading-relaxed mb-4">${questionData.Question}</p>
             <p class="text-sm text-left text-slate-400 mb-4">${questionData.Translation}</p>
@@ -118,9 +170,18 @@
           preConfirm: () => {
             const ans = document.getElementById('swal-input').value.toLowerCase().trim();
             if (ans === questionData.Answer.toLowerCase().trim()) {
-              Swal.fire('答對了！🎉', '你的語感越來越好了！', 'success');
+              Swal.fire({
+                title: '答對了！🎉', 
+                text: '記憶強度已提升！要將此單字移入成就殿堂嗎？', 
+                icon: 'success',
+                showCancelButton: true,
+                confirmButtonText: '🏆 貫通歸檔',
+                cancelButtonText: '下次再說'
+              }).then((result) => {
+                if(result.isConfirmed) archiveWord(rowId, targetWord);
+              });
             } else {
-              Swal.fire('再接再厲！💪', `正確答案是：<b>${questionData.Answer}</b>`, 'error');
+              Swal.fire('再接再厲！💪', `正確答案是：<b>${questionData.Answer}</b><br><br>這題會自動排入下次的遺忘曲線複習！`, 'error');
             }
           }
         });
@@ -129,10 +190,23 @@
       }
     }
 
-    async function archiveWord(rowId) {
+    async function archiveWord(rowId, wordString) {
       const card = document.getElementById(`row-${rowId}`);
-      card.style.display = 'none';
-      document.getElementById('word-count').innerText = Math.max(0, parseInt(document.getElementById('word-count').innerText) - 1);
+      if(card) card.style.display = 'none';
+      
+      // 更新數字
+      let currentCount = parseInt(document.getElementById('word-count').innerText);
+      document.getElementById('word-count').innerText = Math.max(0, currentCount - 1);
+      
+      let masteredCount = parseInt(document.getElementById('mastered-count').innerText);
+      document.getElementById('mastered-count').innerText = masteredCount + 1;
+
+      // 塞入成就殿堂
+      const mList = document.getElementById('mastered-list');
+      const mItem = document.createElement('div');
+      mItem.className = 'bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between';
+      mItem.innerHTML = `<span class="font-bold text-slate-700">${wordString}</span><span class="text-yellow-500">⭐ 已貫通</span>`;
+      mList.appendChild(mItem);
       
       await fetch(GAS_URL, {
         method: 'POST',
