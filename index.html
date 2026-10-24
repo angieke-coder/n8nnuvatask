@@ -161,9 +161,20 @@
         });
         
         let aiData = await res.json();
-        const questions = aiData.output || aiData; 
+        let questions = aiData.output || aiData; 
         
-        if (!Array.isArray(questions)) throw new Error("API 格式錯誤");
+        // 【超級防呆機制】：處理 AI 不穩定的輸出格式
+        if (!Array.isArray(questions)) {
+          // 如果 AI 只吐出單一物件，我們手動把它包進陣列裡
+          if (questions.Question && questions.Answer) {
+            questions = [questions];
+          } else {
+            throw new Error("API 格式錯誤：缺乏題目或答案");
+          }
+        }
+
+        // 幫忘記寫 Type 的題目補上預設值
+        questions.forEach(q => q.Type = q.Type || '綜合測驗');
 
         let correctCount = 0;
         for (let i = 0; i < questions.length; i++) {
